@@ -3,42 +3,35 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Models\Transaction;
 
 class InvoiceController extends Controller
 {
     /**
-     * Menampilkan riwayat transaksi.
+     * Tampilkan halaman riwayat semua transaksi user.
      */
     public function riwayat()
     {
-        $riwayat = DB::table('payments')
-            ->join('carts', 'payments.cart_id', '=', 'carts.id')
-            ->join('products', 'carts.product_id', '=', 'products.id')
-            ->select('payments.*', 'products.name', 'products.price', 'carts.quantity')
-            ->orderBy('payments.paid_at', 'desc')
-            ->get();
+        // Ambil semua transaksi dengan relasi items dan product
+        $transactions = Transaction::with('items.product')->latest()->get();
 
-        return view('invoice.riwayat', compact('riwayat'));
+        return view('invoice.riwayat', compact('transactions'));
+        // atau jika view kamu di resources/views/riwayat.blade.php:
+        // return view('riwayat', compact('transactions'));
     }
 
     /**
-     * Menampilkan invoice berdasarkan ID.
+     * Tampilkan detail invoice untuk satu transaksi berdasarkan ID.
      */
-    public function cetakInvoice($payment_id)
+    public function cetakInvoice($id)
     {
-        $invoice = DB::table('payments')
-            ->join('carts', 'payments.cart_id', '=', 'carts.id')
-            ->join('products', 'carts.product_id', '=', 'products.id')
-            ->where('payments.payment_id', $payment_id)
-            ->select('payments.*', 'products.name', 'carts.quantity')
-            ->first();
+        // Cari transaksi berdasarkan ID dan tampilkan relasi produk
+        $transaction = Transaction::with('items.product')
+            ->findOrFail($id); // pastikan ID valid
 
-        if (!$invoice) {
-            abort(404, 'Invoice tidak ditemukan');
-        }
-
-        return view('invoice.cetak', compact('invoice'));
+        return view('invoice.cetak', compact('transaction'));
+        // atau jika view kamu di resources/views/invoice.blade.php:
+        // return view('invoice', compact('transaction'));
     }
 }
 

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Produk;
+use App\Models\Transaction;
+use App\Models\TransactionItem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -92,62 +94,41 @@ class CartController extends Controller
 
         DB::beginTransaction();
         try {
-            $lastPaymentId = null;
-            $lastProdukId = null;
-            $lastJumlah = null;
+            $paymentId = Str::uuid();
+            $invoice = 'INV-' . strtoupper(Str::random(8));
+            $total = 0;
 
-            foreach ($cart as $id => $item) {
-                $cartId = DB::table('carts')->insertGetId([
-                    'product_id' => $id,
-                    'quantity' => $item['jumlah'],
-                    'created_at' => now(),
-                    'updated_at' => now()
-                ]);
+            foreach ($cart as $item) {
+                $total += $item['harga'] * $item['jumlah'];
+            }
 
-                $paymentId = Str::uuid()->toString();
-                $lastPaymentId = $paymentId;
-                $lastProdukId = $id;
-                $lastJumlah = $item['jumlah'];
+            // Simpan transaksi utama
+            $transaction = Transaction::create([
+                'payment_id' => $paymentId,
+                'invoice_number' => $invoice,
+                'total_price' => $total,
+                'payment_method' => 'Transfer Bank',
+                'status' => 'Lunas',
+                'paid_at' => now(),
+            ]);
 
-                DB::table('payments')->insert([
-                    'payment_id' => $paymentId,
-                    'cart_id' => $cartId,
-                    'amount' => $item['harga'] * $item['jumlah'],
-                    'payment_method' => 'Manual Transfer',
-                    'status' => 'Success',
-                    'paid_at' => now(),
-                    'created_at' => now(),
-                    'updated_at' => now()
+            // Simpan detail produk
+            foreach ($cart as $productId => $item) {
+                TransactionItem::create([
+                    'transaction_id' => $transaction->id,
+                    'product_id' => $productId,
+                    'qty' => $item['jumlah'],
+                    'price' => $item['harga'],
+                    'subtotal' => $item['harga'] * $item['jumlah'],
                 ]);
             }
 
             DB::commit();
             session()->forget('cart');
-
-            // Ambil data produk dan payment terakhir
-            $produk = DB::table('products')->where('id', $lastProdukId)->first();
-            $payment = DB::table('payments')->where('payment_id', $lastPaymentId)->first();
-
-            // Simpan data invoice ke session
-            session([
-                'success' => 'Pembayaran berhasil!',
-                'invoice_id' => $lastPaymentId,
-                'invoice_data' => (object)[
-                    'payment_id' => $payment->payment_id,
-                    'name' => $produk->name,
-                    'quantity' => $lastJumlah,
-                    'amount' => $payment->amount,
-                    'payment_method' => $payment->payment_method,
-                    'status' => $payment->status,
-                    'paid_at' => $payment->paid_at,
-                ]
-            ]);
-
-            return redirect('/riwayat');
-
+            return redirect('/riwayat')->with('success', 'Pembayaran berhasil!');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Gagal menyimpan data pembayaran: ' . $e->getMessage());
+            return back()->with('error', 'Gagal proses pembayaran: ' . $e->getMessage());
         }
     }
 }

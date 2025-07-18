@@ -21,17 +21,9 @@
         <tbody>
             @forelse ($transactions as $transaction)
                 <tr>
+                    <td>{{ $transaction->invoice_number }}</td>
                     <td>
-                        {{ $transaction->invoice_number }}
-                        <br>
-                        <a href="{{ route('invoice.cetak', $transaction->id) }}" 
-                           class="btn btn-sm btn-secondary mt-2" 
-                           target="_blank">
-                            🧾 Cetak Invoice
-                        </a>
-                    </td>
-                    <td>
-                        <ul class="mb-0">
+                        <ul>
                             @foreach ($transaction->items as $item)
                                 <li>{{ $item->product->name }} x {{ $item->qty }}</li>
                             @endforeach
